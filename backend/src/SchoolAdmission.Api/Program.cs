@@ -1,61 +1,56 @@
-using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SchoolAdmission.Api.Data;
 using SchoolAdmission.Api.Middleware;
-
+using Microsoft.AspNetCore.Mvc;
+ 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services
-    .AddControllers()
-    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
-    .ConfigureApiBehaviorOptions(o =>
+ 
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException(
+        "Connection string 'Default' is not configured. Set ConnectionStrings__Default.");
+ 
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
     {
-        o.InvalidModelStateResponseFactory =
-            _ => new BadRequestObjectResult(new { message = "Invalid request." });
+        options.InvalidModelStateResponseFactory = _ =>
+            new BadRequestObjectResult(new { message = "Invalid request." });
     });
-
-// The connection string comes from the ConnectionStrings__Default environment variable. Never hardcoded.
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-{
-    var cs = sp.GetRequiredService<IConfiguration>().GetConnectionString("Default");
-    options.UseNpgsql(cs);
-});
-
-builder.Services.AddCors(o => o.AddPolicy("AllowAll", p =>
-    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
-
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+ 
 var app = builder.Build();
-
-if (string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("Default")))
-    throw new InvalidOperationException(
-        "Connection string is missing. Set the environment variable ConnectionStrings__Default.");
-
-// Apply migrations on startup, retrying while the database is still starting.
-using (var scope = app.Services.CreateScope())
+ 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseCors();
+app.MapControllers();
+ 
+await MigrateWithRetryAsync(app);
+ 
+app.Run();
+ 
+static async Task MigrateWithRetryAsync(WebApplication app)
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    const int maxAttempts = 10;
-
+ 
+    const int maxAttempts = 15;
     for (var attempt = 1; ; attempt++)
     {
         try
         {
-            db.Database.Migrate();
-            break;
+            await db.Database.MigrateAsync();
+            return;
         }
         catch (Exception ex) when (attempt < maxAttempts)
         {
-            logger.LogWarning(ex, "Database not ready (attempt {Attempt}/{Max}). Retrying in 3 seconds...",
-                attempt, maxAttempts);
-            Thread.Sleep(TimeSpan.FromSeconds(3));
+            logger.LogWarning("Database not ready (attempt {Attempt}/{Max}): {Message}",
+                attempt, maxAttempts, ex.Message);
+            await Task.Delay(TimeSpan.FromSeconds(2));
         }
     }
 }
-
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseCors("AllowAll");
-app.MapControllers();
-
-app.Run();
+ 
+public partial class Program { }
