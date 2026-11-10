@@ -1,10 +1,17 @@
-import { API_BASE_URL } from "./config";
+import { BrowserRouter, Routes, Route } from 'react-router';
+import { HomePage } from './pages/HomePage';
+import { AdminPage } from './pages/AdminPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold">School Admission System</h1>
-      <p>Backend: {API_BASE_URL}</p>
-    </main>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/admin" element={<AdminPage />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
