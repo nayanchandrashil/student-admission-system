@@ -45,19 +45,15 @@ export const ActiveHoldCard: FC<ActiveHoldCardProps> = ({
       const left = calculateRemaining();
       setRemainingSeconds(left);
 
-      // Rule: When the time expires, the UI must show EXPIRED without a reload,
-      // and "Pay admission fee" button must be disabled, then fetch fresh status from server once.
       if (left <= 0) {
         clearInterval(timer);
         if (!syncedRef.current && hold.status === 'HELD') {
           syncedRef.current = true;
-          // Optimistically show EXPIRED
           onHoldUpdated({
             ...hold,
             status: 'EXPIRED',
           });
 
-          // Fetch fresh status from server
           api.getHold(hold.holdId)
             .then((res) => {
               onHoldUpdated({
@@ -67,7 +63,6 @@ export const ActiveHoldCard: FC<ActiveHoldCardProps> = ({
               onRefreshClasses();
             })
             .catch(() => {
-              // Ignore network errors on background expiry fetch
             });
         }
       }
@@ -147,15 +142,14 @@ export const ActiveHoldCard: FC<ActiveHoldCardProps> = ({
   };
 
   return (
-    <div className={`rounded-xl shadow-md border p-6 transition-all ${
-      isConfirmed
+    <div className={`rounded-xl shadow-md border p-6 transition-all ${isConfirmed
         ? 'bg-emerald-50/50 border-emerald-200'
         : isExpired
-        ? 'bg-red-50/50 border-red-200'
-        : isCancelled
-        ? 'bg-slate-50 border-slate-200'
-        : 'bg-blue-50/50 border-blue-200'
-    }`}>
+          ? 'bg-red-50/50 border-red-200'
+          : isCancelled
+            ? 'bg-slate-50 border-slate-200'
+            : 'bg-blue-50/50 border-blue-200'
+      }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
