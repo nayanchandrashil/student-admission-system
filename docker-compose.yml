@@ -24,5 +24,13 @@ services:
       db:
         condition: service_healthy
 
+  web:
+    build: ./frontend
+    ports: [ "3000:80" ]
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - api
+
 volumes:
   pgdata:
